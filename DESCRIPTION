@@ -1,0 +1,10 @@
+Package: RegUtils
+Type: Package
+Title: Tools For Model Regressions
+Version: 0.1
+Date: 2015-06-14
+Author: Who wrote it
+Maintainer: Who to complain to <yourfault@somewhere.net>
+Description: Some utils for linear regressions, such as: alm (linear regression absorbing categorical variables).
+License: MIT (to be decided later)
+LazyData: TRUE
