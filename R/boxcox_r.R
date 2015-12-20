@@ -91,17 +91,19 @@ boxcox.r <- function(formula, data, subset, na.action,
   start_value = NULL
   if (model == "theta") {
     fcn.to.min <- .min.theta
-    start_value = c(1,1)
+    start_value = c(theta = 1,lambda = 1)
   } else if (model == "lambda") {
     fcn.to.min <- .min.lambda
-    start_value = 1
+    start_value = c(lambda = 1)
   } else if (model == "rhs") {
     fcn.to.min <- .min.rhs
-    start_value = 1
+    start_value = c(lambda = 1)
   } else {
     stop("Model must be one of the following: theta, lambda, lhs or rhs")
   }
 
+  #Initilize object
+  res = list()
   #Check test parameters argument (no optimization just likelihood estimation)
   min.list = NULL
   if (!is.null(test.params)) {
@@ -111,13 +113,25 @@ boxcox.r <- function(formula, data, subset, na.action,
     }
     else
       min.list$par = test.params
+      names(min.list$par) = c("theta", "lambda")
     }
-  else
+  else {
     min.list = nlminb(start = start_value, objective = fcn.to.min,
                       lower = optimize.bounds[1], upper = optimize.bounds[2],
                       data=list(x = x, y = y, z=z), has.intercept = has.intercept)
+    #Estimate errors
+    min.maxLik = maxLik(fcn.to.min, start = min.list$par, method="BFGS",
+                      data=list(x = x, y = y, z=z), has.intercept = has.intercept, use.ML=TRUE)
+    if (model == "theta") {
+      res$lambda.se = deltaMethod(min.maxLik, "tanh(lambda)", vcov. = abs(vcov(min.maxLik)))$SE
+      res$theta.se = deltaMethod(min.maxLik, "tanh(theta)", vcov. = abs(vcov(min.maxLik)))$SE
+    } else if (model == "lambda") {
+      res$lambda.se = res$theta.se = deltaMethod(min.maxLik, "tanh(lambda)", vcov. = abs(vcov(min.maxLik)))$SE
+    } else if (model == "rhs") {
+      res$lambda.se = deltaMethod(min.maxLik, "tanh(lambda)", vcov. = abs(vcov(min.maxLik)))$SE
+    }
+  }
 
-  res = list()
   class(res) <- c(if (is.matrix(y)) "mlm", "lm")
   params = NULL
   model.df = NULL
@@ -148,7 +162,7 @@ boxcox.r <- function(formula, data, subset, na.action,
   res$terms <- mt
   res$residuals <- outp$residuals
   res$fitted.values <- outp$fitted
-  res$coefficients = outp$coefs
+  res$coefficients = t(outp$coefs)[1,]
   res$log_likelihood = outp$log_lik
   res$vcov = outp$vcov
   row.names(res$vcov) = row.names(res$coefficients)
@@ -192,9 +206,13 @@ boxcox.r <- function(formula, data, subset, na.action,
 }
 
 #Loglikelihood function for theta model
-.min.theta <- function(params, data, has.intercept, omit.x=NULL) {
+.min.theta <- function(params, data, has.intercept, omit.x=NULL, use.ML=FALSE) {
   theta = params[1]
   lambda = params[2]
+  if (use.ML) {
+    theta = tanh(theta)
+    lambda = tanh(lambda)
+  }
   y = data$y; x = data$x; z = data$z
   y_t = .box_cox(y, theta)
   N = length(y_t)
@@ -207,20 +225,24 @@ boxcox.r <- function(formula, data, subset, na.action,
   qw <- qr(W_lambda)
   d_hat <- solve.qr(qw, y_t)
   sigma_sq_hat = 1/N*crossprod((y_t-W_lambda%*%d_hat))
+  if (use.ML) {
+    log_lik = (-1/2)*(log(2*pi)+1+log(sigma_sq_hat))+(theta-1)*log(y)
+    return (log_lik)
+  }
   log_lik = (-N/2)*(log(2*pi)+1+log(sigma_sq_hat))+(theta-1)*sum(log(y))
   -1*log_lik
 }
 
 #Loglikelihood function for lambda model
-.min.lambda <- function(lambda, data, has.intercept, omit.x=NULL) {
+.min.lambda <- function(lambda, data, has.intercept, omit.x=NULL, use.ML=FALSE) {
   .min.theta(c(lambda, lambda), data=data, has.intercept = has.intercept,
-            omit.x=omit.x)
+             omit.x=omit.x, use.ML=use.ML)
 }
 
 #loglikehood functions for restricted models used on Wald Test
-.min.rhs <- function(lambda, data, has.intercept, omit.x=NULL) {
+.min.rhs <- function(lambda, data, has.intercept, omit.x=NULL, use.ML=FALSE) {
   .min.theta(c(1, lambda), data=data, has.intercept = has.intercept,
-            omit.x=omit.x)
+             omit.x=omit.x, use.ML = use.ML)
 }
 
 #Estimation of residuals, fitted values, vcov
@@ -263,6 +285,21 @@ summary.boxcox_r <- function (object, correlation = FALSE, symbolic.cor = FALSE,
                                "Chi.sq" = chi.sq,
                                "df Chi.sq"    = z,
                                "Pr(>|t|)"   = p)
+
+  if (object$model == "theta") {
+    z.bc = c(object$theta/object$theta.se, object$lambda/object$lambda.se)
+    object$bc.coefficients <- cbind("Estimate"   = c(object$theta, object$lambda),
+                                    "Std.Err" = c(object$theta.se, object$lambda.se),
+                                    "z"    = z.bc,
+                                    "Pr(>|t|)"   = 1 - pnorm(z.bc))
+  } else if (object$model == "lambda" | object$model == "lhs" | object$model == "rhs") {
+    z.bc = c(object$lambda/object$lambda.se)
+    object$bc.coefficients <- cbind("Estimate"   = c(object$lambda),
+                                    "Std.Err" = c(object$lambda.se),
+                                    "z"    = z.bc,
+                                    "Pr(>|t|)"   = 1 - pnorm(z.bc))
+  }
+
   object$p.val = 2 * pchisq(abs(object$chi.sq), df = object$rank, lower.tail = FALSE)
   class(object) <- c("summary.boxcox_r", class(object))
   object
@@ -272,12 +309,7 @@ print.summary.boxcox_r <- function(x, digits = 4,...) {
   cat("Call:\n")
   print(x$call)
   cat("\nBox-Cox Estimates :\n")
-  if (x$model == "theta") {
-    cat("Theta = ", format(x$theta, digits = digits, nsmall = 4),
-        "\nLambda = ", format(x$lambda, digits = digits, nsmall = 4), "\n", sep = "")
-  } else if (x$model == "lambda" | x$model == "lhs" | x$model == "rhs") {
-    cat("Lambda = ", format(x$lambda, digits = digits, nsmall = 4),"\n", sep = "")
-  }
+  printCoefmat(x$bc.coefficients)
   cat("\nLR Test:\n")
   cat("X2 = ", format(x$chi.sq, digits = digits, nsmall = 1),
       ", df = ", x$df.model, ", P(> X2) = ", format(x$p.val, digits = digits,
@@ -286,3 +318,19 @@ print.summary.boxcox_r <- function(x, digits = 4,...) {
   printCoefmat(x$coefficients)
   cat("---\nlog likehood = ", format(x$log_likelihood, digits = digits, nsmall = 1), "\n", sep = "")
 }
+
+logLik.ratio.test <- function(fit1, fit2, digits = 4) {
+  if(  !("boxcox_r" %in% class( fit1) )){
+    stop( "argument 'fit1' must be an object of class 'boxcox_r'")
+  }
+  if(  !("boxcox_r" %in% class( fit2) )){
+    stop( "argument 'fit2' must be an object of class 'boxcox_r'")
+  }
+  chi2 = as.numeric(2*(fit1$log_likelihood - fit2$log_likelihood))
+  df = fit1$df.model
+  pvalue = 1 - pchisq(chi2, df = df)
+  cat("\nWald test:", formatC(chi2, digits = digits),
+      "p-value:", format.pval(pvalue, digits = digits), "\n\n")
+
+}
+

@@ -89,7 +89,7 @@ etreg <- function(formula, treat, data, subset, na.action,
     rval$x <- x
   if (ret.y)
     rval$y <- y
-
+  rval$real.v = length(mf)-1
   class(rval) <- c("etreg", class(rval))
   return (rval)
 }
@@ -196,6 +196,9 @@ summary.etreg <- function(object, robust=FALSE, eigentol=1e-12,... ) {
   class(result) <- c( "summary.etreg", class( result ) )
   result$call <- object$call
   result$nObs <- object$nObs
+  n = object$real.v
+  wt = Wald.Test(b = coef(object)[1:n], Sigma = vcov(object)[1:n,1:n], Terms = 2:n)
+  result$wald.test = wt
   return(result)
 }
 
@@ -214,7 +217,12 @@ print.summary.etreg <- function( x, logSigma = TRUE, digits = 4, ... ) {
   cat( maximType( x ), ", ", nIter( x ), " iterations\n", sep = "" )
   cat( "Return code ", returnCode( x ), ": ", returnMessage( x ),
        "\n", sep = "" )
-  cat( "Log-likelihood:", x$loglik, "on", sum( activePar( x ) ), "Df\n" )
+  cat( "Log-likelihood:", x$loglik, "on", sum( activePar( x ) ), "Df" )
+  v = x$wald.test[["result"]][["chi2"]]
+
+  cat("\nWald test:", formatC(v["chi2"], digits = digits),
+      "on", v["df"],
+      "DF,  p-value:", format.pval(v["P"], digits = digits), "\n\n")
   cat( "\n" )
   invisible( x )
 }

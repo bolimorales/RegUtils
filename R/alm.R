@@ -149,13 +149,14 @@ alm <- function (formula, data, subset, weights, na.action, method = "qr",
   ##################
 
   if (model)
-    z$model <- mf
+    z$model <- mf[index_set,]
   if (ret.x)
     z$x <- x
   if (ret.y)
     z$y <- y
   if (!qr)
     z$qr <- NULL
+  z$obs <- length(index_set)
   class(z) <- c("alm", class(z))
   return (z)
 }
@@ -164,10 +165,11 @@ summary.alm <- function (object, correlation = FALSE, symbolic.cor = FALSE,
                          ...)
 {
   ## call lm method
-  ans <- NextMethod()
-  wt = waldTest(b = coef(object), Sigma = vcov(object), Terms = 2:length(coef(object)))
+  ans <- suppressWarnings(NextMethod())
+  wt = Wald.Test(b = coef(object), Sigma = vcov(object), Terms = 2:length(coef(object)))
   ans$wald.test = wt
   class(ans) <- c("summary.alm", class(ans))
+  ans$obs = object$obs
   ans
 }
 
@@ -188,6 +190,8 @@ print.summary.alm <- function(x, digits = max(3, getOption("digits") - 3),
   } else {
     print(x$residuals, digits = digits, ...)
   }
+  cat("\nObservations: ")
+  cat(paste(deparse(x$obs),"\n"))
 
   cat("\nCoefficients:\n")
   printCoefmat(x$coefficients, digits = digits, signif.stars = signif.stars,
@@ -215,7 +219,7 @@ print.summary.alm <- function(x, digits = max(3, getOption("digits") - 3),
 }
 
 #taken from aod package, performs Wald-Test
-waldTest = function (Sigma, b, Terms = NULL, L = NULL, H0 = NULL, df = NULL,
+Wald.Test = function (Sigma, b, Terms = NULL, L = NULL, H0 = NULL, df = NULL,
                      verbose = FALSE)
 {
   if (is.null(Terms) & is.null(L))

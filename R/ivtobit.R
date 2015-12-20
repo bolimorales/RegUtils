@@ -113,6 +113,10 @@ ivtobit <- function(formula, instruments, data, subset, na.action = NULL, weight
   # return the degrees of freedom of the residuals
   rval$df.residual <- unname( rval$nObs[ 1 ] - length(coef(rval)))
 
+  if (model)
+    rval$model <- mf
+  rval$real.v = length(mf)-1
+
   # censoring points
   rval$left <- left
   rval$right <- right
@@ -321,6 +325,9 @@ summary.ivtobit <- function(object, robust=FALSE, ...) {
     result$method <- object$method
     result$s <- sqrt(sum(object$residuals^2)/object$df)
     result$df <- object$df
+    n = object$real.v
+    wt = Wald.Test(b = coef(object)[1:n], Sigma = vcov(object)[1:n,1:n], Terms = 2:n)
+    result$wald.test = wt
     class(result) <- c( "summary.ivtobit", class( result ) )
     return(result)
   }
@@ -351,6 +358,9 @@ summary.ivtobit <- function(object, robust=FALSE, ...) {
   result$call <- object$call
   result$nObs <- object$nObs
   result$method <- object$method
+  n = object$real.v
+  wt = Wald.Test(b = coef(object)[1:n], Sigma = vcov(object)[1:n,1:n], Terms = 2:n)
+  result$wald.test = wt
   class(result) <- c( "summary.ivtobit", class( result ) )
   return(result)
 }
@@ -382,13 +392,22 @@ print.summary.ivtobit <- function( x, logSigma = TRUE, digits = 4, ... ) {
   if (x$method == "twostep") {
     cat( "\n" )
     cat(paste("\nResidual standard error:", round(x$s, digits),
-              "on", x$df, "degrees of freedom\n\n"))
+              "on", x$df, "degrees of freedom\n"))
+    v = x$wald.test[["result"]][["chi2"]]
+    cat("Wald test:", formatC(v["chi2"], digits = digits),
+        "on", v["df"],
+        "DF,  p-value:", format.pval(v["P"], digits = digits), "\n\n")
   } else {
     cat( "\n" )
     cat( maximType( x ), ", ", nIter( x ), " iterations\n", sep = "" )
     cat( "Return code ", returnCode( x ), ": ", returnMessage( x ),
          "\n", sep = "" )
     cat( "Log-likelihood:", x$loglik, "on", sum( activePar( x ) ), "Df\n" )
+    v = x$wald.test[["result"]][["chi2"]]
+
+    cat("\nWald test:", formatC(v["chi2"], digits = digits),
+        "on", v["df"],
+        "DF,  p-value:", format.pval(v["P"], digits = digits), "\n\n")
     cat( "alpha: ",x$alpha)
     cat( "\n" )
     cat( "Sigma:\n" )

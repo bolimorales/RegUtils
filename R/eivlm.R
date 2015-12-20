@@ -167,7 +167,7 @@ eivlm.wfit <- function (x, y, w, offset = NULL, tol = 1e-07,
   #########################
   if (!singular.ok && z$rank < p)
     stop("singular fit encountered")
-  z$coefficients <- coef
+  z$coefficients <- t(coef)[1,]
   z$fitted.values <- y - z$residuals
   z$weights <- w
   if (zero.weights) {
@@ -253,7 +253,7 @@ summary.eivlm <- function (object, correlation = FALSE, symbolic.cor = FALSE,
   ans$residuals <- r
   ans$coefficients <- cbind(est, se, tval, 2 * pt(abs(tval),
                                                   rdf, lower.tail = FALSE))
-  dimnames(ans$coefficients) <- list(row.names(z$coefficients),
+  dimnames(ans$coefficients) <- list(names(z$coefficients),
                                      c("Estimate", "Std. Error", "t value", "Pr(>|t|)"))
   ans$aliased <- is.na(coef(object))
   ans$sigma <- sqrt(resvar)[1,1]
@@ -286,6 +286,5 @@ summary.eivlm <- function (object, correlation = FALSE, symbolic.cor = FALSE,
 
 vcov.eivlm <- function (object, ...)
 {
-  so <- summary.eivlm(object, corr = FALSE)
-  so$sigma^2 * so$cov.unscaled
+  object$vcov
 }

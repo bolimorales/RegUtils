@@ -6,7 +6,7 @@ import("sandwich")
 import("censReg")
 
 #exportPattern("^[[:alpha:]]+")
-export(alm, boxcox.r, eivlm, ivtobit, etreg, etreg.fit)
+export(alm, boxcox.r, eivlm, ivtobit, etreg, etreg.fit, Wald.Test, logLik.ratio.test)
 S3method("summary", "boxcox_r")
 S3method("print", "summary.boxcox_r")
 S3method("summary", "alm")
