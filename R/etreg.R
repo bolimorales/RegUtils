@@ -188,7 +188,7 @@ summary.etreg <- function(object, robust=FALSE, eigentol=1e-12,... ) {
                       object$sigma[1]/object$sigma[2],
                       object$lambda[1]/object$lambda[2])))
   pv = 2*pnorm( -abs(t))
-  estim = cbind(v,t,pv)
+  estim = cbind(v[,1:2],t,pv)
   row.names(estim) = c("rho", "sigma","lambda")
   colnames(estim) = c("Estimate", "Std. error", "t value", "Pr(> t)")
   result$estimate = rbind(result$estimate,
